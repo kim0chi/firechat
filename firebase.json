@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "public",
+    "public": "CloudDemo/src",
     "ignore": [
       "firebase.json",
       "**/.*",

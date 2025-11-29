@@ -11,7 +11,7 @@
 
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getDatabase, ref, push, onValue, remove, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // TODO: Add SDKs for Firebase products that you want to use
@@ -60,6 +60,8 @@ const firebaseConfig = {
         }
     };
 
+    let unsubscribeMessages = null;
+
     // Auth State Listener
     onAuthStateChanged(auth, (user) => {
         if (user) {
@@ -70,11 +72,52 @@ const firebaseConfig = {
             
             userPhoto.src = user.photoURL || "";
             userName.textContent = user.displayName || user.email;
+
+            // Start listening for messages when user logs in
+            if (!unsubscribeMessages) {
+                unsubscribeMessages = onValue(messagesRef, (snapshot) => {
+                    messagesDiv.innerHTML = "";
+
+                    if (!snapshot.exists()) {
+                        messagesDiv.innerHTML = "<div class='empty-state'>No messages yet.</div>";
+                        return;
+                    }
+
+                    const data = snapshot.val();
+                    const messages = [];
+
+                    for (let id in data) {
+                        messages.push({
+                            id: id,
+                            name: data[id].name,
+                            text: data[id].text,
+                            type: data[id].type,
+                            timestamp: data[id].timestamp
+                        });
+                    }
+
+                    messages.sort((a, b) => a.timestamp - b.timestamp);
+                    messages.forEach(showMessage);
+                    
+                    // Auto-scroll to bottom
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }, (error) => {
+                    console.error("Error reading messages:", error);
+                });
+            }
+
         } else {
             currentUser = null;
             authSection.style.display = "block";
             userInfo.style.display = "none";
             chatSections.forEach(section => section.classList.remove("active"));
+
+            // Stop listening when user logs out
+            if (unsubscribeMessages) {
+                unsubscribeMessages();
+                unsubscribeMessages = null;
+            }
+            messagesDiv.innerHTML = "<div class='empty-state'>Please sign in to view messages.</div>";
         }
     });
 
@@ -83,39 +126,39 @@ const firebaseConfig = {
     function showMessage(msg) {
         var div = document.createElement("div");
         var time = new Date(msg.timestamp).toLocaleTimeString();
-        div.innerHTML = "[" + time + "] <strong>" + msg.name + "</strong>: " + msg.text;
+        
+        let content = "";
+        if (msg.type === 'image') {
+            content = `<br><img src="${msg.text}" style="max-width: 100%; border-radius: 8px; margin-top: 5px;">`;
+        } else {
+            content = ": " + msg.text;
+        }
+        
+        div.innerHTML = "[" + time + "] <strong>" + msg.name + "</strong>" + content;
         messagesDiv.appendChild(div);
     }
 
-    // Real-time listener
-    onValue(messagesRef, (snapshot) => {
-
-        messagesDiv.innerHTML = "";
-
-        // If there are no messages yet
-        if (!snapshot.exists()) {
-            messagesDiv.innerHTML = "<div class='empty-state'>No messages yet.</div>";
+    // Send Image
+    window.sendImage = function() {
+        if (!currentUser) {
+            alert("Please sign in first");
             return;
         }
-
-        const data = snapshot.val();
-        const messages = [];
-
-        for (let id in data) {
-            messages.push({
-                id: id,
-                name: data[id].name,
-                text: data[id].text,
-                timestamp: data[id].timestamp
+        
+        const url = prompt("Enter the URL of the image or GIF:");
+        if (url) {
+            push(messagesRef, {
+                name: currentUser.displayName || currentUser.email,
+                text: url,
+                type: 'image',
+                timestamp: serverTimestamp(),
+                userId: currentUser.uid
+            }).catch((error) => {
+                console.error("Firebase Write Error:", error);
+                alert("Failed to send: " + error.message);
             });
         }
-
-        messages.sort((a, b) => a.timestamp - b.timestamp);
-        messages.forEach(showMessage);
-        
-        // Auto-scroll to bottom
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    });
+    };
 
 
     // Send message
@@ -135,7 +178,7 @@ const firebaseConfig = {
         push(messagesRef, {
             name: currentUser.displayName || currentUser.email,
             text: text,
-            timestamp: Date.now(),
+            timestamp: serverTimestamp(),
             userId: currentUser.uid
         }).catch((error) => {
             // This will alert you if it's a permission issue
