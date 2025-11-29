@@ -1,0 +1,30 @@
+type User @table {
+  username: String!
+  email: String!
+  createdAt: Timestamp!
+  lastOnlineAt: Timestamp!
+  photoUrl: String
+  displayName: String
+}
+
+type Chat @table {
+  chatType: String!
+  createdAt: Timestamp!
+  name: String
+  description: String
+}
+
+type Membership @table(key: ["user", "chat"]) {
+  user: User!
+  chat: Chat!
+  joinedAt: Timestamp!
+  isAdmin: Boolean
+}
+
+type Message @table {
+  chat: Chat!
+  sender: User!
+  content: String!
+  sentAt: Timestamp!
+  readAt: Timestamp
+}
