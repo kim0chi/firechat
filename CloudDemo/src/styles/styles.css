@@ -45,6 +45,7 @@ h1 {
     font-size: 20px;
     font-weight: 600;
     letter-spacing: -0.5px;
+    border:hsl(from color h s l);
 }
 
 .subtitle {
